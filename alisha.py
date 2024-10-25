@@ -14,7 +14,7 @@ import google.generativeai as genai
 import os
 
 # Set up genAI API
-api_key = "AIzaSyCYSsCUM_ANs2eE4pwMm3MK6vNkDYxnMHs"
+api_key = "your_api_key"
 genai.configure(api_key=api_key)
 
 # Initialize Text-to-Speech Engine
