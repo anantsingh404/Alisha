@@ -8,10 +8,14 @@ import webbrowser
 import openai
 from datetime import datetime
 import tkinter as tk
+from tkinter import scrolledtext
 import pyaudio
+import google.generativeai as genai
+import os
 
-# Set up OpenAI API
-openai.api_key = "your_key_here"
+# Set up genAI API
+api_key = "AIzaSyCYSsCUM_ANs2eE4pwMm3MK6vNkDYxnMHs"
+genai.configure(api_key=api_key)
 
 # Initialize Text-to-Speech Engine
 def speak(text):
@@ -41,53 +45,47 @@ def face_recognition():
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
     cap = cv2.VideoCapture(0)
 
-    # Load known face(s) for matching
-    known_face_image = cv2.imread('abc.jpeg')  # Replace with your image path
-    known_face_image = cv2.cvtColor(known_face_image, cv2.COLOR_BGR2GRAY)
-    known_face_image = cv2.resize(known_face_image, (200, 200))  # Resize for easier comparison
+    # Load known (authorized) face image
+    known_face_image = cv2.imread('abc.jpg')  # Replace with your authorized face image path
+    known_face_gray = cv2.cvtColor(known_face_image, cv2.COLOR_BGR2GRAY)
+    known_face_resized = cv2.resize(known_face_gray, (200, 200))  # Resize for comparison
 
-    recognized = False
-    while not recognized:
+    verified = False
+    while not verified:
         _, frame = cap.read()
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5)
-
-        print(f"Detected {len(faces)} faces.")  # Debugging output
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = face_cascade.detectMultiScale(gray_frame, scaleFactor=1.1, minNeighbors=5)
 
         for (x, y, w, h) in faces:
             cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+            face_region = gray_frame[y:y+h, x:x+w]
+            face_resized = cv2.resize(face_region, (200, 200))  # Resize detected face for comparison
 
-            # Get the region of interest (the detected face)
-            face_roi = gray[y:y+h, x:x+w]
-            face_roi_resized = cv2.resize(face_roi, (200, 200))  # Resize for comparison
+            # Calculate similarity score
+            difference = cv2.absdiff(known_face_resized, face_resized)
+            similarity = np.sum(difference) / 255  # Sum of differences
 
-            # Compare the detected face with the known face
-            difference = cv2.absdiff(known_face_image, face_roi_resized)
-            similarity = np.sum(difference) / 255  # Normalize to range 0-1
+            print(f"Similarity score: {similarity}")  # For debugging
 
-            print(f"Similarity score: {similarity}")  # Debugging output
-            
-            # Set a threshold for similarity (this may need adjustment)
-            if similarity >=500:  # Adjust this threshold as needed
-                recognized = True
-                label_var.set("Face recognized! Starting assistant...")
-                speak("Face recognized! Starting assistant.")
-                root.update_idletasks()
-                break  # Break out of the loop if recognized
+            # Check if similarity meets threshold
+            if similarity <20000:  # Adjust threshold as necessary for accuracy
+                verified = True
+                speak("Face recognized! Access granted.")
+                print("Face recognized! Access granted.")
+                break
             else:
-                label_var.set("Face not recognized. Please try again.")
-                root.update_idletasks()
+                speak("Face not recognized. Try again.")
+                print("Face not recognized. Try again.")
 
-        # Show the frame for debugging
-        cv2.imshow('Face Recognition', frame)
-
-        if cv2.waitKey(1) & 0xFF == ord('q') or recognized:
+        # Display video feed (optional for debugging)
+        cv2.imshow('Face Verification', frame)
+        if cv2.waitKey(1) & 0xFF == ord('q') or verified:
             break
 
     cap.release()
     cv2.destroyAllWindows()
+    return verified
 
-    return recognized
 
 
 # Greet the user based on the time of day
@@ -128,20 +126,9 @@ def send_mail():
 
 # Get a response from ChatGPT based on user input
 def chatgpt_response(prompt):
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
-            max_tokens=150
-        )
-        return response['choices'][0]['message']['content']
-    except openai.error.AuthenticationError:
-        return "Authentication failed. Please check your OpenAI API key."
-    except openai.error.RateLimitError:
-        return "Rate limit exceeded. Please try again later or consider upgrading."
-    except Exception as e:
-        return f"An error occurred: {e}"
+     model = genai.GenerativeModel("gemini-1.5-flash")
+     response = model.generate_content(prompt)
+     return response.text
 
 # Handle specific commands and their functionalities
 def handle_command(command):
@@ -169,12 +156,15 @@ def handle_command(command):
         speak("Goodbye!")
         exit()   
     else:
-        prompt = command.replace(command, "")
-        answer = chatgpt_response(prompt)
-        label_var.set(answer)
-        print(answer)
-        speak(answer)
-
+        answer = chatgpt_response(command)
+        res = display_response(answer)
+        speak(res)
+# Function to display long responses in the scrollable text box
+def display_response(response_text):
+    response_lines = response_text.splitlines()[:10]
+    response_box.delete("1.0", tk.END)  # Clear previous text
+    response_box.insert(tk.END, response_lines)
+    return response_lines  # Insert new response
 # Set up Tkinter GUI
 root = tk.Tk()
 root.title("Alisha - Desktop Assistant")
@@ -186,6 +176,10 @@ label_var.set("Welcome! Click 'Start' to begin.")
 label = tk.Label(root, textvariable=label_var, wraplength=500)
 label.pack(pady=20)
 
+# Create a scrollable text box for responses
+response_box = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=70, height=15)
+response_box.pack(pady=20)
+
 # Function to start the assistant after face recognition
 def start_assistant():
     if face_recognition():
@@ -194,7 +188,6 @@ def start_assistant():
             command = listen_command()
             if command:
                 handle_command(command)
-
 # Tkinter buttons to start and exit the assistant
 start_button = tk.Button(root, text="Start Assistant", command=start_assistant)
 start_button.pack(pady=10)
