@@ -15,7 +15,9 @@ openai.api_key = "your_key_here"
 
 # Initialize Text-to-Speech Engine
 def speak(text):
-    engine = pyttsx3.init()
+    engine = pyttsx3.init('sapi5')
+    voices = engine.getProperty('voices')
+    engine.setProperty('voice', voices[1].id)
     engine.say(text)
     engine.runAndWait()
 
@@ -40,7 +42,7 @@ def face_recognition():
     cap = cv2.VideoCapture(0)
 
     # Load known face(s) for matching
-    known_face_image = cv2.imread('photo.jpg')  # Replace with your image path
+    known_face_image = cv2.imread('abc.jpeg')  # Replace with your image path
     known_face_image = cv2.cvtColor(known_face_image, cv2.COLOR_BGR2GRAY)
     known_face_image = cv2.resize(known_face_image, (200, 200))  # Resize for easier comparison
 
@@ -176,12 +178,12 @@ def handle_command(command):
 # Set up Tkinter GUI
 root = tk.Tk()
 root.title("Alisha - Desktop Assistant")
-root.geometry("400x300")
+root.geometry("800x500")
 
 label_var = tk.StringVar()
 label_var.set("Welcome! Click 'Start' to begin.")
 
-label = tk.Label(root, textvariable=label_var, wraplength=300)
+label = tk.Label(root, textvariable=label_var, wraplength=500)
 label.pack(pady=20)
 
 # Function to start the assistant after face recognition
