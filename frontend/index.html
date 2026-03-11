@@ -1,0 +1,1851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FaceVault — AI Desktop Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --bg:         #05070d;
+      --surface:    #0c0f1a;
+      --surface2:   #111527;
+      --border:     rgba(100,120,255,0.12);
+      --border2:    rgba(100,120,255,0.22);
+      --accent:     #4f6ef7;
+      --accent2:    #8b5cf6;
+      --accent3:    #06d6a0;
+      --danger:     #ff4757;
+      --warn:       #ffa502;
+      --text:       #e8eaf6;
+      --text2:      #8892b0;
+      --text3:      #4a5568;
+      --glow:       0 0 40px rgba(79,110,247,0.3);
+      --glow2:      0 0 20px rgba(139,92,246,0.25);
+      --radius:     16px;
+      --radius-sm:  10px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ─── Noise Texture Overlay ────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.4;
+    }
+
+    /* ─── Ambient Gradients ────────────────────────────────── */
+    .ambient {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.12;
+    }
+    .ambient-1 { width: 600px; height: 600px; background: var(--accent); top: -200px; left: -200px; animation: drift1 20s ease-in-out infinite alternate; }
+    .ambient-2 { width: 500px; height: 500px; background: var(--accent2); bottom: -150px; right: -150px; animation: drift2 25s ease-in-out infinite alternate; }
+    .ambient-3 { width: 300px; height: 300px; background: var(--accent3); top: 40%; left: 50%; animation: drift3 18s ease-in-out infinite alternate; }
+
+    @keyframes drift1 { to { transform: translate(80px, 60px); } }
+    @keyframes drift2 { to { transform: translate(-80px, -60px); } }
+    @keyframes drift3 { to { transform: translate(-40px, 80px); } }
+
+    /* ─── Layout ───────────────────────────────────────────── */
+    .app-shell {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      grid-template-rows: 64px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ─── Topbar ───────────────────────────────────────────── */
+    .topbar {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 28px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(5,7,13,0.8);
+      backdrop-filter: blur(20px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 1.2rem;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-icon {
+      width: 34px;
+      height: 34px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      box-shadow: var(--glow);
+    }
+
+    .logo span { color: var(--text2); font-weight: 400; }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent3);
+      box-shadow: 0 0 10px var(--accent3);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .status-text { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--text2); }
+    .time-display { font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--text2); }
+
+    /* ─── Sidebar ──────────────────────────────────────────── */
+    .sidebar {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+    }
+
+    .sidebar-section {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text3);
+      padding: 12px 12px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.875rem;
+      color: var(--text2);
+      border: 1px solid transparent;
+      user-select: none;
+    }
+
+    .nav-item:hover { background: var(--surface2); color: var(--text); border-color: var(--border); }
+
+    .nav-item.active {
+      background: linear-gradient(135deg, rgba(79,110,247,0.15), rgba(139,92,246,0.1));
+      color: var(--text);
+      border-color: var(--border2);
+      box-shadow: inset 0 0 20px rgba(79,110,247,0.05);
+    }
+
+    .nav-icon { font-size: 1rem; width: 20px; text-align: center; }
+
+    .nav-badge {
+      margin-left: auto;
+      background: var(--accent);
+      color: white;
+      font-size: 0.65rem;
+      font-family: 'DM Mono', monospace;
+      padding: 2px 7px;
+      border-radius: 20px;
+    }
+
+    .sidebar-bottom {
+      margin-top: auto;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ─── Main Content ─────────────────────────────────────── */
+    .main-content {
+      overflow-y: auto;
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* ─── Page Header ──────────────────────────────────────── */
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .page-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 2rem;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+    }
+
+    .page-title span { 
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .page-subtitle { color: var(--text2); font-size: 0.9rem; margin-top: 6px; }
+
+    /* ─── Cards ────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s ease;
+    }
+
+    .card:hover { border-color: var(--border2); }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(79,110,247,0.03), transparent);
+      pointer-events: none;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 600;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ─── Grid Layouts ─────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; }
+    .col-span-2 { grid-column: span 2; }
+
+    /* ─── Stat Cards ───────────────────────────────────────── */
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover { border-color: var(--border2); transform: translateY(-2px); }
+
+    .stat-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .stat-label { font-size: 0.8rem; color: var(--text2); }
+    .stat-trend { font-size: 0.75rem; font-family: 'DM Mono', monospace; }
+    .trend-up { color: var(--accent3); }
+    .trend-down { color: var(--danger); }
+
+    /* ─── Camera ───────────────────────────────────────────── */
+    .camera-container {
+      position: relative;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #camera-feed {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .camera-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .scan-frame {
+      width: 180px;
+      height: 180px;
+      position: relative;
+    }
+
+    .scan-frame::before, .scan-frame::after {
+      content: '';
+      position: absolute;
+      width: 30px;
+      height: 30px;
+    }
+
+    .scan-corner {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+    }
+
+    .scan-corner::before, .scan-corner::after {
+      content: '';
+      position: absolute;
+      background: var(--accent);
+    }
+
+    .scan-corner.tl::before { top: 0; left: 0; width: 3px; height: 30px; }
+    .scan-corner.tl::after  { top: 0; left: 0; width: 30px; height: 3px; }
+    .scan-corner.tr { top: 0; right: 0; }
+    .scan-corner.tr::before { top: 0; right: 0; width: 3px; height: 30px; }
+    .scan-corner.tr::after  { top: 0; right: 0; width: 30px; height: 3px; }
+    .scan-corner.bl { bottom: 0; left: 0; }
+    .scan-corner.bl::before { bottom: 0; left: 0; width: 3px; height: 30px; }
+    .scan-corner.bl::after  { bottom: 0; left: 0; width: 30px; height: 3px; }
+    .scan-corner.br { bottom: 0; right: 0; }
+    .scan-corner.br::before { bottom: 0; right: 0; width: 3px; height: 30px; }
+    .scan-corner.br::after  { bottom: 0; right: 0; width: 30px; height: 3px; }
+
+    .scan-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      top: 0;
+      animation: scanMove 2.5s ease-in-out infinite;
+    }
+
+    @keyframes scanMove {
+      0%   { top: 0; opacity: 1; }
+      90%  { top: 100%; opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    .camera-status {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 20px;
+      background: rgba(5,7,13,0.85);
+      border: 1px solid var(--border2);
+      white-space: nowrap;
+    }
+
+    .camera-off-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      color: var(--text3);
+      font-size: 0.875rem;
+    }
+
+    .camera-off-icon { font-size: 2.5rem; }
+
+    /* ─── Verification Result ──────────────────────────────── */
+    .verify-result {
+      border-radius: var(--radius-sm);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      text-align: center;
+      border: 1px solid transparent;
+      transition: all 0.4s ease;
+    }
+
+    .verify-result.success {
+      background: rgba(6,214,160,0.08);
+      border-color: rgba(6,214,160,0.3);
+    }
+
+    .verify-result.failed {
+      background: rgba(255,71,87,0.08);
+      border-color: rgba(255,71,87,0.3);
+    }
+
+    .verify-result.idle {
+      background: var(--surface2);
+      border-color: var(--border);
+    }
+
+    .verify-icon { font-size: 2rem; }
+    .verify-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; }
+    .verify-confidence { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--text2); }
+
+    /* ─── Confidence Bar ───────────────────────────────────── */
+    .confidence-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 3px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* ─── Buttons ──────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: white;
+      box-shadow: 0 4px 20px rgba(79,110,247,0.3);
+    }
+    .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 25px rgba(79,110,247,0.45); }
+
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border-color: var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--border2); background: rgba(255,255,255,0.05); }
+
+    .btn-danger {
+      background: rgba(255,71,87,0.1);
+      color: var(--danger);
+      border-color: rgba(255,71,87,0.3);
+    }
+    .btn-danger:hover:not(:disabled) { background: rgba(255,71,87,0.2); }
+
+    .btn-success {
+      background: rgba(6,214,160,0.1);
+      color: var(--accent3);
+      border-color: rgba(6,214,160,0.3);
+    }
+
+    .btn-sm { padding: 7px 14px; font-size: 0.8rem; }
+    .btn-lg { padding: 13px 28px; font-size: 1rem; }
+    .btn-full { width: 100%; }
+
+    /* ─── Mic Button ───────────────────────────────────────── */
+    .mic-btn {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      cursor: pointer;
+      border: 2px solid var(--border2);
+      background: var(--surface2);
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .mic-btn:hover { border-color: var(--accent); transform: scale(1.05); }
+
+    .mic-btn.listening {
+      background: rgba(79,110,247,0.15);
+      border-color: var(--accent);
+      box-shadow: 0 0 0 0 rgba(79,110,247,0.5);
+      animation: micPulse 1.5s ease-out infinite;
+    }
+
+    @keyframes micPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(79,110,247,0.5); }
+      70%  { box-shadow: 0 0 0 20px rgba(79,110,247,0); }
+      100% { box-shadow: 0 0 0 0 rgba(79,110,247,0); }
+    }
+
+    /* ─── Terminal / Log ───────────────────────────────────── */
+    .terminal {
+      background: #020408;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.75rem;
+      height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .terminal::-webkit-scrollbar { width: 4px; }
+    .terminal::-webkit-scrollbar-track { background: transparent; }
+    .terminal::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+    .log-line { display: flex; gap: 10px; line-height: 1.5; }
+    .log-time { color: var(--text3); min-width: 70px; }
+    .log-type { min-width: 60px; }
+    .log-type.info { color: var(--accent); }
+    .log-type.success { color: var(--accent3); }
+    .log-type.warn { color: var(--warn); }
+    .log-type.error { color: var(--danger); }
+    .log-msg { color: var(--text2); flex: 1; }
+
+    /* ─── Form Elements ────────────────────────────────────── */
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 0.8rem; color: var(--text2); font-weight: 500; }
+
+    .form-input, .form-textarea {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.875rem;
+      padding: 10px 14px;
+      transition: all 0.2s ease;
+      outline: none;
+      width: 100%;
+    }
+
+    .form-input:focus, .form-textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(79,110,247,0.12);
+    }
+
+    .form-textarea { resize: vertical; min-height: 100px; font-size: 0.85rem; line-height: 1.5; }
+
+    /* ─── Face Chips ───────────────────────────────────────── */
+    .face-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .face-chip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      transition: all 0.2s ease;
+    }
+
+    .face-chip:hover { border-color: var(--border2); }
+
+    .face-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      font-weight: 600;
+      font-family: 'Syne', sans-serif;
+      flex-shrink: 0;
+    }
+
+    .face-info { flex: 1; }
+    .face-name { font-weight: 500; font-size: 0.9rem; }
+    .face-meta { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--text2); }
+
+    /* ─── Command Input ────────────────────────────────────── */
+    .command-input-wrap {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .command-input {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.85rem;
+      padding: 11px 20px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .command-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,110,247,0.1); }
+    .command-input::placeholder { color: var(--text3); }
+
+    /* ─── Response Bubble ──────────────────────────────────── */
+    .response-area {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 18px;
+      min-height: 80px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: var(--text2);
+    }
+
+    .response-area.has-content { color: var(--text); border-color: rgba(79,110,247,0.2); }
+
+    /* ─── Quick Action Buttons ─────────────────────────────── */
+    .quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+
+    .quick-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      padding: 16px 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 0.75rem;
+      color: var(--text2);
+      text-align: center;
+      user-select: none;
+    }
+
+    .quick-btn:hover { border-color: var(--border2); color: var(--text); transform: translateY(-2px); }
+    .quick-btn-icon { font-size: 1.4rem; }
+
+    /* ─── Tabs ─────────────────────────────────────────────── */
+    .tabs { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: var(--radius-sm); }
+
+    .tab {
+      flex: 1;
+      padding: 8px 14px;
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 7px;
+      transition: all 0.2s ease;
+      color: var(--text2);
+      user-select: none;
+    }
+
+    .tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 6px rgba(0,0,0,0.3); }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    /* ─── Toast ────────────────────────────────────────────── */
+    .toast-container {
+      position: fixed;
+      bottom: 28px;
+      right: 28px;
+      z-index: 10000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      font-size: 0.85rem;
+      min-width: 280px;
+      animation: toastIn 0.3s ease;
+      backdrop-filter: blur(20px);
+    }
+
+    .toast.success { border-color: rgba(6,214,160,0.4); }
+    .toast.error   { border-color: rgba(255,71,87,0.4); }
+
+    @keyframes toastIn { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* ─── Waveform ─────────────────────────────────────────── */
+    .waveform {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 32px;
+    }
+
+    .wave-bar {
+      width: 3px;
+      border-radius: 2px;
+      background: var(--accent);
+      animation: waveAnim 0.8s ease-in-out infinite;
+    }
+
+    .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+    @keyframes waveAnim {
+      0%, 100% { height: 8px; opacity: 0.4; }
+      50%       { height: 28px; opacity: 1; }
+    }
+
+    /* ─── Pages ────────────────────────────────────────────── */
+    .page { display: none; flex-direction: column; gap: 24px; }
+    .page.active { display: flex; }
+
+    /* ─── Activity Feed ────────────────────────────────────── */
+    .activity-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .activity-item:last-child { border-bottom: none; }
+
+    .activity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .activity-content { flex: 1; }
+    .activity-title { font-size: 0.875rem; color: var(--text); }
+    .activity-time { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--text3); margin-top: 2px; }
+
+    /* ─── Scrollbars ───────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 10px; }
+
+    /* ─── Animations ───────────────────────────────────────── */
+    .fade-in { animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ─── No faces empty ───────────────────────────────────── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 32px;
+      color: var(--text3);
+      font-size: 0.875rem;
+      text-align: center;
+    }
+    .empty-icon { font-size: 2rem; }
+  </style>
+</head>
+<body>
+
+<!-- Ambient -->
+<div class="ambient ambient-1"></div>
+<div class="ambient ambient-2"></div>
+<div class="ambient ambient-3"></div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<div class="app-shell">
+
+  <!-- ── Topbar ────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-icon">🔐</div>
+      FaceVault <span>/ AI Assistant</span>
+    </div>
+    <div class="topbar-right">
+      <div class="status-dot" id="status-dot"></div>
+      <span class="status-text" id="status-text">SYSTEM READY</span>
+      <span class="time-display" id="clock">--:-- --</span>
+    </div>
+  </header>
+
+  <!-- ── Sidebar ───────────────────────────────────────────── -->
+  <nav class="sidebar">
+    <div class="sidebar-section">Navigation</div>
+    <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')">
+      <span class="nav-icon">⬛</span> Dashboard
+    </div>
+    <div class="nav-item" data-page="verify" onclick="navigate('verify')">
+      <span class="nav-icon">🔍</span> Face Verify
+    </div>
+    <div class="nav-item" data-page="register" onclick="navigate('register')">
+      <span class="nav-icon">➕</span> Register Face
+    </div>
+    <div class="nav-item" data-page="assistant" onclick="navigate('assistant')">
+      <span class="nav-icon">🎤</span> AI Assistant
+    </div>
+    <div class="nav-item" data-page="email" onclick="navigate('email')">
+      <span class="nav-icon">📧</span> Email
+    </div>
+    <div class="nav-item" data-page="faces" onclick="navigate('faces'); loadFacesList()">
+      <span class="nav-icon">👥</span> Face Registry
+      <span class="nav-badge" id="face-count-badge">0</span>
+    </div>
+
+    <div class="sidebar-section" style="margin-top: 8px;">System</div>
+    <div class="nav-item" onclick="openURL('https://github.com')">
+      <span class="nav-icon">🌐</span> Browser
+    </div>
+    <div class="nav-item" onclick="openURL('https://open.spotify.com')">
+      <span class="nav-icon">🎵</span> Music
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="nav-item" onclick="testBackend()">
+        <span class="nav-icon">💡</span> Test Connection
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main ─────────────────────────────────────────────── -->
+  <main class="main-content">
+
+    <!-- ═══ DASHBOARD ═════════════════════════════════════════ -->
+    <div class="page active fade-in" id="page-dashboard">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Welcome to <span>FaceVault</span></div>
+          <div class="page-subtitle">Secure AI-powered desktop assistant with biometric authentication</div>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(79,110,247,0.15)">👤</div>
+          <div class="stat-value" id="stat-faces">0</div>
+          <div class="stat-label">Registered Faces</div>
+          <div class="stat-trend trend-up" id="stat-face-change">— no changes yet</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(6,214,160,0.15)">✅</div>
+          <div class="stat-value" id="stat-verified">0</div>
+          <div class="stat-label">Verifications Today</div>
+          <div class="stat-trend trend-up">Session count</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:rgba(139,92,246,0.15)">🎤</div>
+          <div class="stat-value" id="stat-commands">0</div>
+          <div class="stat-label">Commands Run</div>
+          <div class="stat-trend">Voice + text</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Quick Verify -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🔐 Quick Verify</div>
+            <button class="btn btn-secondary btn-sm" onclick="navigate('verify')">Full View →</button>
+          </div>
+          <div class="camera-container" style="aspect-ratio: 16/9; max-height: 200px;">
+            <video id="dash-camera" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+            <div id="dash-cam-off" class="camera-off-state">
+              <div class="camera-off-icon">📷</div>
+              <div>Camera inactive</div>
+            </div>
+            <canvas id="dash-canvas" style="display:none;position:absolute;"></canvas>
+          </div>
+          <div style="margin-top: 14px; display: flex; gap: 10px;">
+            <button class="btn btn-secondary btn-sm" onclick="startDashCam()">Start Camera</button>
+            <button class="btn btn-primary btn-sm" onclick="quickVerify()">Verify Identity</button>
+          </div>
+        </div>
+
+        <!-- Activity -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📋 Activity Log</div>
+            <button class="btn btn-secondary btn-sm" onclick="clearActivity()">Clear</button>
+          </div>
+          <div id="activity-feed">
+            <div class="empty-state">
+              <div class="empty-icon">📭</div>
+              <div>No activity yet. Start verifying or give commands!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px;">⚡ Quick Actions</div>
+        <div class="quick-grid">
+          <div class="quick-btn" onclick="navigate('verify')">
+            <span class="quick-btn-icon">🔍</span>Verify Face
+          </div>
+          <div class="quick-btn" onclick="navigate('assistant'); sendQuickCmd('What time is it?')">
+            <span class="quick-btn-icon">🕐</span>Get Time
+          </div>
+          <div class="quick-btn" onclick="openURL('https://weather.com')">
+            <span class="quick-btn-icon">🌤</span>Weather
+          </div>
+          <div class="quick-btn" onclick="openURL('https://open.spotify.com')">
+            <span class="quick-btn-icon">🎵</span>Play Music
+          </div>
+          <div class="quick-btn" onclick="navigate('email')">
+            <span class="quick-btn-icon">📧</span>Send Email
+          </div>
+          <div class="quick-btn" onclick="navigate('assistant'); sendQuickCmd('Tell me a joke')">
+            <span class="quick-btn-icon">😄</span>Tell Joke
+          </div>
+          <div class="quick-btn" onclick="openURL('https://www.google.com')">
+            <span class="quick-btn-icon">🔎</span>Google
+          </div>
+          <div class="quick-btn" onclick="navigate('register')">
+            <span class="quick-btn-icon">➕</span>Add Face
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ VERIFY ═════════════════════════════════════════════ -->
+    <div class="page fade-in" id="page-verify">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Face <span>Verification</span></div>
+          <div class="page-subtitle">Authenticate identity using biometric face recognition</div>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📷 Camera Feed</div>
+            <div id="verify-cam-status" class="status-text">OFFLINE</div>
+          </div>
+          <div class="camera-container">
+            <video id="verify-camera" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+            <div id="verify-cam-off" class="camera-off-state">
+              <div class="camera-off-icon">📷</div>
+              <div>Click "Start Camera" to begin</div>
+            </div>
+            <canvas id="verify-canvas" style="display:none;position:absolute;"></canvas>
+            <div class="camera-overlay" id="verify-overlay" style="display:none;">
+              <div class="scan-frame">
+                <div class="scan-corner tl"></div>
+                <div class="scan-corner tr"></div>
+                <div class="scan-corner bl"></div>
+                <div class="scan-corner br"></div>
+                <div class="scan-line"></div>
+              </div>
+            </div>
+            <div class="camera-status" id="verify-cam-label">CAMERA OFF</div>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:14px;">
+            <button class="btn btn-secondary btn-full" id="btn-start-verify-cam" onclick="startVerifyCam()">📷 Start Camera</button>
+            <button class="btn btn-danger btn-full" id="btn-stop-verify-cam" onclick="stopVerifyCam()" style="display:none;">⏹ Stop</button>
+          </div>
+        </div>
+
+        <div class="card" style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card-title">🔐 Verification Result</div>
+          <div class="verify-result idle" id="verify-result-box">
+            <div class="verify-icon">🔒</div>
+            <div class="verify-name">Awaiting Scan</div>
+            <div class="verify-confidence">Start camera and click verify to authenticate</div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text2);margin-bottom:6px;">
+              <span>Confidence</span>
+              <span id="confidence-pct">0%</span>
+            </div>
+            <div class="confidence-bar">
+              <div class="confidence-fill" id="confidence-fill" style="width:0%;background:var(--accent);"></div>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-full btn-lg" onclick="doVerify()">🔍 Verify Identity</button>
+          <div style="font-size:0.75rem;color:var(--text3);text-align:center;">Threshold: 85% confidence for positive match</div>
+
+          <div class="card-title" style="margin-top:8px;">📊 Session Stats</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">
+              <div style="font-size:1.5rem;font-family:'Syne',sans-serif;font-weight:700;" id="v-success">0</div>
+              <div style="font-size:0.75rem;color:var(--text2);">Successful</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">
+              <div style="font-size:1.5rem;font-family:'Syne',sans-serif;font-weight:700;" id="v-failed">0</div>
+              <div style="font-size:0.75rem;color:var(--text2);">Failed</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">📜 Verification Log</div>
+        <div class="terminal" id="verify-log">
+          <div class="log-line">
+            <span class="log-time">--:--:--</span>
+            <span class="log-type info">[INIT]</span>
+            <span class="log-msg">FaceVault verification module ready. Awaiting camera input.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ REGISTER ═══════════════════════════════════════════ -->
+    <div class="page fade-in" id="page-register">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Register <span>New Face</span></div>
+          <div class="page-subtitle">Add a new user to the biometric database</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">📷 Capture Photo</div>
+            <div class="tabs" style="width:200px;">
+              <div class="tab active" onclick="switchRegTab('camera', this)">Camera</div>
+              <div class="tab" onclick="switchRegTab('upload', this)">Upload</div>
+            </div>
+          </div>
+
+          <div id="reg-camera-panel">
+            <div class="camera-container">
+              <video id="reg-camera" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+              <div id="reg-cam-off" class="camera-off-state">
+                <div class="camera-off-icon">📷</div>
+                <div>Start camera to capture your face</div>
+              </div>
+              <canvas id="reg-canvas" style="display:none;"></canvas>
+              <div class="camera-overlay" id="reg-overlay" style="display:none;">
+                <div class="scan-frame">
+                  <div class="scan-corner tl"></div>
+                  <div class="scan-corner tr"></div>
+                  <div class="scan-corner bl"></div>
+                  <div class="scan-corner br"></div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:14px;">
+              <button class="btn btn-secondary btn-full" id="btn-start-reg-cam" onclick="startRegCam()">📷 Start</button>
+              <button class="btn btn-primary btn-full" id="btn-capture" onclick="captureRegPhoto()" disabled>📸 Capture</button>
+            </div>
+          </div>
+
+          <div id="reg-upload-panel" style="display:none;">
+            <div style="border:2px dashed var(--border2);border-radius:12px;padding:40px;text-align:center;cursor:pointer;" onclick="document.getElementById('file-upload').click()">
+              <div style="font-size:2rem;margin-bottom:8px;">📁</div>
+              <div style="color:var(--text2);font-size:0.875rem;">Click to upload image</div>
+              <div style="color:var(--text3);font-size:0.75rem;margin-top:4px;">JPG, PNG supported</div>
+            </div>
+            <input type="file" id="file-upload" accept="image/*" style="display:none;" onchange="handleFileUpload(event)">
+          </div>
+
+          <div id="captured-preview" style="display:none;margin-top:14px;">
+            <div style="font-size:0.8rem;color:var(--text2);margin-bottom:8px;">Preview:</div>
+            <img id="preview-img" style="width:100%;border-radius:10px;border:1px solid var(--border2);" />
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="margin-bottom:20px;">📋 User Details</div>
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="form-group">
+              <label class="form-label">Full Name *</label>
+              <input type="text" class="form-input" id="reg-name" placeholder="e.g. John Doe" />
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;">
+              <div style="font-size:0.8rem;color:var(--text2);margin-bottom:10px;">📌 Tips for best results:</div>
+              <ul style="font-size:0.78rem;color:var(--text3);line-height:1.8;padding-left:16px;">
+                <li>Good lighting facing your face</li>
+                <li>Look directly at the camera</li>
+                <li>Remove glasses if possible</li>
+                <li>Neutral facial expression</li>
+                <li>Face fully visible, not cropped</li>
+              </ul>
+            </div>
+            <button class="btn btn-primary btn-full btn-lg" id="btn-register" onclick="registerFace()" disabled>
+              ➕ Register Face
+            </button>
+            <div class="terminal" id="reg-log" style="height:120px;">
+              <div class="log-line">
+                <span class="log-time">--:--:--</span>
+                <span class="log-type info">[INIT]</span>
+                <span class="log-msg">Registration module ready.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ ASSISTANT ══════════════════════════════════════════ -->
+    <div class="page fade-in" id="page-assistant">
+      <div class="page-header">
+        <div>
+          <div class="page-title">AI <span>Assistant</span></div>
+          <div class="page-subtitle">Voice & text commands — browse, play music, get information</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🎙️ Voice Control</div>
+            <div id="listen-status" style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--text2);">IDLE</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:20px;padding:20px 0;">
+            <div id="mic-btn" class="mic-btn" onclick="listenCommand()">🎤</div>
+            <div id="waveform-wrap" style="display:none;">
+              <div class="waveform">
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+                <div class="wave-bar"></div>
+              </div>
+            </div>
+            <div style="font-size:0.8rem;color:var(--text2);text-align:center;">
+              Click the mic or use the text input below<br>to give a command
+            </div>
+          </div>
+
+          <div class="card-title" style="margin-bottom:10px;">⌨️ Text Command</div>
+          <div class="command-input-wrap">
+            <input type="text" class="command-input" id="text-command" placeholder="e.g. 'open browser', 'what time is it?'" 
+              onkeydown="if(event.key==='Enter') sendTextCommand()" />
+            <button class="btn btn-primary" onclick="sendTextCommand()">Send</button>
+          </div>
+
+          <div class="card-title" style="margin-top:20px;margin-bottom:10px;">💬 Response</div>
+          <div class="response-area" id="response-display">
+            Awaiting your command...
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="margin-bottom:16px;">⚡ Command Shortcuts</div>
+          <div style="display:flex;flex-direction:column;gap:8px;" id="shortcut-list">
+          </div>
+
+          <div class="card-title" style="margin-top:20px;margin-bottom:10px;">📜 Command History</div>
+          <div class="terminal" id="cmd-log">
+            <div class="log-line">
+              <span class="log-time">--:--:--</span>
+              <span class="log-type info">[INIT]</span>
+              <span class="log-msg">Assistant ready. Try "hello" or "what time is it?"</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ EMAIL ══════════════════════════════════════════════ -->
+    <div class="page fade-in" id="page-email">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Send <span>Email</span></div>
+          <div class="page-subtitle">Compose and send emails via Gmail SMTP</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:20px;">📝 Compose</div>
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <div class="form-group">
+              <label class="form-label">Your Gmail Address</label>
+              <input type="email" class="form-input" id="email-from" placeholder="yourname@gmail.com" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">App Password <span style="color:var(--text3)">(Gmail App Password)</span></label>
+              <input type="password" class="form-input" id="email-pass" placeholder="••••••••••••••••" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Recipient Email</label>
+              <input type="email" class="form-input" id="email-to" placeholder="recipient@email.com" />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Subject</label>
+              <input type="text" class="form-input" id="email-subject" placeholder="Email subject..." />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Message</label>
+              <textarea class="form-textarea" id="email-body" placeholder="Type your message here..."></textarea>
+            </div>
+            <button class="btn btn-primary btn-full btn-lg" onclick="sendEmail()">📤 Send Email</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title" style="margin-bottom:16px;">📌 Setup Guide</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="background:rgba(255,165,2,0.08);border:1px solid rgba(255,165,2,0.3);border-radius:10px;padding:14px;">
+              <div style="color:var(--warn);font-weight:600;font-size:0.85rem;margin-bottom:8px;">⚠️ Gmail App Password Required</div>
+              <div style="font-size:0.78rem;color:var(--text2);line-height:1.7;">
+                For security, Gmail requires App Passwords instead of your regular password. 
+                Go to your Google Account → Security → 2-Step Verification → App passwords.
+              </div>
+            </div>
+
+            <div style="font-size:0.8rem;color:var(--text2);">Steps to get App Password:</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.78rem;color:var(--text2);">
+                <span style="background:var(--accent);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.65rem;">1</span>
+                Enable 2-Step Verification in your Google Account
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.78rem;color:var(--text2);">
+                <span style="background:var(--accent);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.65rem;">2</span>
+                Go to Security → App Passwords
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.78rem;color:var(--text2);">
+                <span style="background:var(--accent);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.65rem;">3</span>
+                Create app password for "Mail" + "Windows Computer"
+              </div>
+              <div style="display:flex;gap:10px;align-items:flex-start;font-size:0.78rem;color:var(--text2);">
+                <span style="background:var(--accent);color:white;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:0.65rem;">4</span>
+                Copy the 16-character password and paste above
+              </div>
+            </div>
+
+            <div class="terminal" id="email-log" style="height:140px;">
+              <div class="log-line">
+                <span class="log-time">--:--:--</span>
+                <span class="log-type info">[INIT]</span>
+                <span class="log-msg">Email module ready. Configure credentials above.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ FACES LIST ══════════════════════════════════════════ -->
+    <div class="page fade-in" id="page-faces">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Face <span>Registry</span></div>
+          <div class="page-subtitle">Manage registered biometric profiles</div>
+        </div>
+        <button class="btn btn-primary" onclick="navigate('register')">➕ Add New Face</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">👥 Registered Users</div>
+          <span id="face-registry-count" style="font-family:'DM Mono',monospace;font-size:0.75rem;color:var(--text2);">Loading...</span>
+        </div>
+        <div class="face-list" id="face-list-container">
+          <div class="empty-state">
+            <div class="empty-icon">📭</div>
+            <div>No faces registered yet.</div>
+            <button class="btn btn-primary btn-sm" onclick="navigate('register')" style="margin-top:8px;">Register First Face</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════════════
+const API = 'http://localhost:5000/api';
+let stats = { faces: 0, verified: 0, failed: 0, commands: 0 };
+let activity = [];
+let verifyStream = null;
+let regStream = null;
+let dashStream = null;
+let capturedImage = null;
+
+// ─── Clock ─────────────────────────────────────────────────────
+function updateClock() {
+  const now = new Date();
+  let h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  document.getElementById('clock').textContent = 
+    `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} ${ampm}`;
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ─── Navigation ─────────────────────────────────────────────────
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const el = document.getElementById(`page-${page}`);
+  if (el) { el.classList.add('active'); el.classList.add('fade-in'); setTimeout(() => el.classList.remove('fade-in'), 400); }
+  const nav = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (nav) nav.classList.add('active');
+}
+
+// ─── Toast ──────────────────────────────────────────────────────
+function toast(msg, type = 'info', icon = 'ℹ️') {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${icon}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transform = 'translateX(30px)'; t.style.transition = 'all 0.3s'; setTimeout(() => t.remove(), 300); }, 3000);
+}
+
+// ─── Log ────────────────────────────────────────────────────────
+function logLine(termId, type, msg) {
+  const term = document.getElementById(termId);
+  const now = new Date();
+  const ts = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const typeMap = { info: '[INFO]', success: '[OK]', warn: '[WARN]', error: '[ERR]' };
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">${ts}</span><span class="log-type ${type}">${typeMap[type]||type}</span><span class="log-msg">${msg}</span>`;
+  term.appendChild(line);
+  term.scrollTop = term.scrollHeight;
+}
+
+// ─── Activity Feed ──────────────────────────────────────────────
+function addActivity(title, color = 'var(--accent)') {
+  activity.unshift({ title, time: new Date().toLocaleTimeString(), color });
+  if (activity.length > 15) activity.pop();
+  renderActivity();
+}
+
+function renderActivity() {
+  const feed = document.getElementById('activity-feed');
+  if (activity.length === 0) {
+    feed.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div>No activity yet.</div></div>`;
+    return;
+  }
+  feed.innerHTML = activity.map(a => `
+    <div class="activity-item">
+      <div class="activity-dot" style="background:${a.color}"></div>
+      <div class="activity-content">
+        <div class="activity-title">${a.title}</div>
+        <div class="activity-time">${a.time}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function clearActivity() { activity = []; renderActivity(); }
+
+// ─── API ────────────────────────────────────────────────────────
+async function apiCall(endpoint, method='GET', body=null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + endpoint, opts);
+  return res.json();
+}
+
+// ─── Backend Test ───────────────────────────────────────────────
+async function testBackend() {
+  try {
+    const data = await apiCall('/health');
+    toast('Backend connected! ✅', 'success', '✅');
+    document.getElementById('status-text').textContent = 'BACKEND ONLINE';
+  } catch {
+    toast('Backend offline. Start app.py', 'error', '❌');
+    document.getElementById('status-text').textContent = 'BACKEND OFFLINE';
+  }
+}
+
+// ─── Load Stats ─────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const data = await apiCall('/faces/list');
+    stats.faces = data.count || 0;
+    document.getElementById('stat-faces').textContent = stats.faces;
+    document.getElementById('face-count-badge').textContent = stats.faces;
+  } catch {}
+}
+
+function updateStatDisplays() {
+  document.getElementById('stat-verified').textContent = stats.verified;
+  document.getElementById('stat-commands').textContent = stats.commands;
+  if (document.getElementById('v-success')) {
+    document.getElementById('v-success').textContent = stats.verified;
+    document.getElementById('v-failed').textContent = stats.failed;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD CAMERA
+// ═══════════════════════════════════════════════════════════════
+async function startDashCam() {
+  try {
+    dashStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const v = document.getElementById('dash-camera');
+    v.srcObject = dashStream;
+    v.style.display = 'block';
+    document.getElementById('dash-cam-off').style.display = 'none';
+    toast('Camera started', 'success', '📷');
+  } catch(e) { toast('Camera access denied', 'error', '❌'); }
+}
+
+async function quickVerify() {
+  const video = document.getElementById('dash-camera');
+  if (!dashStream) { toast('Start camera first', 'warn', '⚠️'); return; }
+  const canvas = document.getElementById('dash-canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const imgData = canvas.toDataURL('image/jpeg', 0.85);
+  
+  try {
+    const res = await apiCall('/verify', 'POST', { image: imgData });
+    if (res.verified) {
+      toast(`✅ ${res.name} verified (${res.confidence}%)`, 'success', '✅');
+      addActivity(`Face verified: ${res.name} (${res.confidence}% confidence)`, 'var(--accent3)');
+      stats.verified++;
+    } else {
+      toast(`❌ Verification failed (${res.confidence || 0}%)`, 'error', '❌');
+      addActivity(`Verification failed: ${res.error || 'No match'}`, 'var(--danger)');
+      stats.failed++;
+    }
+    updateStatDisplays();
+  } catch { toast('Backend offline — start app.py', 'error', '❌'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VERIFY PAGE
+// ═══════════════════════════════════════════════════════════════
+async function startVerifyCam() {
+  try {
+    verifyStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const v = document.getElementById('verify-camera');
+    v.srcObject = verifyStream;
+    v.style.display = 'block';
+    document.getElementById('verify-cam-off').style.display = 'none';
+    document.getElementById('verify-overlay').style.display = 'flex';
+    document.getElementById('verify-cam-label').textContent = 'SCANNING...';
+    document.getElementById('verify-cam-status').textContent = 'LIVE';
+    document.getElementById('btn-start-verify-cam').style.display = 'none';
+    document.getElementById('btn-stop-verify-cam').style.display = 'flex';
+    logLine('verify-log', 'info', 'Camera stream started. Ready to verify.');
+  } catch(e) {
+    toast('Camera access denied', 'error', '❌');
+    logLine('verify-log', 'error', 'Camera access denied: ' + e.message);
+  }
+}
+
+function stopVerifyCam() {
+  if (verifyStream) { verifyStream.getTracks().forEach(t => t.stop()); verifyStream = null; }
+  document.getElementById('verify-camera').style.display = 'none';
+  document.getElementById('verify-cam-off').style.display = 'flex';
+  document.getElementById('verify-overlay').style.display = 'none';
+  document.getElementById('verify-cam-label').textContent = 'CAMERA OFF';
+  document.getElementById('verify-cam-status').textContent = 'OFFLINE';
+  document.getElementById('btn-start-verify-cam').style.display = 'flex';
+  document.getElementById('btn-stop-verify-cam').style.display = 'none';
+  logLine('verify-log', 'warn', 'Camera stopped.');
+}
+
+async function doVerify() {
+  const video = document.getElementById('verify-camera');
+  if (!verifyStream) { toast('Start camera first', 'warn', '⚠️'); return; }
+
+  const canvas = document.getElementById('verify-canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const imgData = canvas.toDataURL('image/jpeg', 0.85);
+
+  logLine('verify-log', 'info', 'Sending frame for verification...');
+  document.getElementById('verify-cam-label').textContent = 'ANALYZING...';
+
+  try {
+    const res = await apiCall('/verify', 'POST', { image: imgData });
+    const box = document.getElementById('verify-result-box');
+    const conf = Math.round(res.confidence || 0);
+    document.getElementById('confidence-pct').textContent = conf + '%';
+    const fill = document.getElementById('confidence-fill');
+    fill.style.width = conf + '%';
+
+    if (res.verified) {
+      fill.style.background = 'var(--accent3)';
+      box.className = 'verify-result success';
+      box.innerHTML = `<div class="verify-icon">✅</div><div class="verify-name">${res.name}</div><div class="verify-confidence">Confidence: ${conf}% — Access Granted</div>`;
+      document.getElementById('verify-cam-label').textContent = `✅ ${res.name}`;
+      logLine('verify-log', 'success', `VERIFIED: ${res.name} at ${conf}% confidence`);
+      addActivity(`Verified: ${res.name} (${conf}%)`, 'var(--accent3)');
+      stats.verified++;
+      toast(`Welcome, ${res.name}!`, 'success', '✅');
+    } else {
+      fill.style.background = 'var(--danger)';
+      box.className = 'verify-result failed';
+      box.innerHTML = `<div class="verify-icon">❌</div><div class="verify-name">Access Denied</div><div class="verify-confidence">${res.error || 'No match found'} — ${conf}%</div>`;
+      document.getElementById('verify-cam-label').textContent = '❌ DENIED';
+      logLine('verify-log', 'error', `FAILED: ${res.error || 'No match'} at ${conf}%`);
+      addActivity(`Verification failed: ${res.error || 'Unknown'}`, 'var(--danger)');
+      stats.failed++;
+      toast('Identity not recognized', 'error', '❌');
+    }
+    updateStatDisplays();
+  } catch(e) {
+    logLine('verify-log', 'error', 'Backend offline: ' + e.message);
+    toast('Backend offline — start app.py', 'error', '❌');
+    document.getElementById('verify-cam-label').textContent = 'ERROR';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REGISTER PAGE
+// ═══════════════════════════════════════════════════════════════
+function switchRegTab(tab, el) {
+  document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('reg-camera-panel').style.display = tab === 'camera' ? 'block' : 'none';
+  document.getElementById('reg-upload-panel').style.display = tab === 'upload' ? 'block' : 'none';
+}
+
+async function startRegCam() {
+  try {
+    regStream = await navigator.mediaDevices.getUserMedia({ video: true });
+    const v = document.getElementById('reg-camera');
+    v.srcObject = regStream;
+    v.style.display = 'block';
+    document.getElementById('reg-cam-off').style.display = 'none';
+    document.getElementById('reg-overlay').style.display = 'flex';
+    document.getElementById('btn-capture').disabled = false;
+    document.getElementById('btn-start-reg-cam').textContent = '🔄 Restart';
+    logLine('reg-log', 'info', 'Camera started. Position face in frame.');
+  } catch(e) {
+    toast('Camera access denied', 'error', '❌');
+    logLine('reg-log', 'error', 'Camera error: ' + e.message);
+  }
+}
+
+function captureRegPhoto() {
+  const video = document.getElementById('reg-camera');
+  if (!regStream) return;
+  const canvas = document.createElement('canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  capturedImage = canvas.toDataURL('image/jpeg', 0.9);
+  document.getElementById('preview-img').src = capturedImage;
+  document.getElementById('captured-preview').style.display = 'block';
+  document.getElementById('btn-register').disabled = false;
+  logLine('reg-log', 'success', 'Photo captured. Enter name and register.');
+  toast('Photo captured!', 'success', '📸');
+}
+
+function handleFileUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    capturedImage = ev.target.result;
+    document.getElementById('preview-img').src = capturedImage;
+    document.getElementById('captured-preview').style.display = 'block';
+    document.getElementById('btn-register').disabled = false;
+    logLine('reg-log', 'success', 'Image loaded: ' + file.name);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function registerFace() {
+  const name = document.getElementById('reg-name').value.trim();
+  if (!name) { toast('Enter a name first', 'warn', '⚠️'); return; }
+  if (!capturedImage) { toast('Capture or upload a photo first', 'warn', '⚠️'); return; }
+
+  logLine('reg-log', 'info', `Registering face for "${name}"...`);
+
+  try {
+    const res = await apiCall('/faces/register', 'POST', { name, image: capturedImage });
+    if (res.success) {
+      toast(`${name} registered! ✅`, 'success', '✅');
+      logLine('reg-log', 'success', `Face registered: ${name} (${res.faces_detected} face detected)`);
+      addActivity(`Registered new face: ${name}`, 'var(--accent)');
+      stats.faces++;
+      document.getElementById('stat-faces').textContent = stats.faces;
+      document.getElementById('face-count-badge').textContent = stats.faces;
+      document.getElementById('reg-name').value = '';
+      capturedImage = null;
+      document.getElementById('captured-preview').style.display = 'none';
+      document.getElementById('btn-register').disabled = true;
+    } else {
+      toast(res.error || 'Registration failed', 'error', '❌');
+      logLine('reg-log', 'error', 'Failed: ' + res.error);
+    }
+  } catch(e) {
+    toast('Backend offline — start app.py', 'error', '❌');
+    logLine('reg-log', 'error', 'Backend error: ' + e.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// FACES LIST
+// ═══════════════════════════════════════════════════════════════
+async function loadFacesList() {
+  try {
+    const data = await apiCall('/faces/list');
+    const container = document.getElementById('face-list-container');
+    document.getElementById('face-registry-count').textContent = `${data.count} users registered`;
+    document.getElementById('face-count-badge').textContent = data.count;
+    
+    if (data.count === 0) {
+      container.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div>No faces registered yet.</div><button class="btn btn-primary btn-sm" onclick="navigate('register')" style="margin-top:8px;">Register First Face</button></div>`;
+      return;
+    }
+    
+    container.innerHTML = data.faces.map(f => `
+      <div class="face-chip">
+        <div class="face-avatar">${f.name[0].toUpperCase()}</div>
+        <div class="face-info">
+          <div class="face-name">${f.name}</div>
+          <div class="face-meta">Registered — ${f.filename}</div>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteFace('${f.name}')">🗑 Remove</button>
+      </div>
+    `).join('');
+  } catch { toast('Could not load faces', 'error', '❌'); }
+}
+
+async function deleteFace(name) {
+  if (!confirm(`Remove "${name}" from the registry?`)) return;
+  try {
+    const res = await apiCall(`/faces/delete/${name}`, 'DELETE');
+    if (res.success) {
+      toast(`${name} removed`, 'success', '✅');
+      addActivity(`Removed face: ${name}`, 'var(--warn)');
+      loadFacesList();
+      loadStats();
+    } else { toast(res.error, 'error', '❌'); }
+  } catch { toast('Backend offline', 'error', '❌'); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ASSISTANT
+// ═══════════════════════════════════════════════════════════════
+const SHORTCUTS = [
+  { icon: '🕐', label: 'Current Time', cmd: 'What time is it?' },
+  { icon: '📅', label: 'Today\'s Date', cmd: 'What is today\'s date?' },
+  { icon: '🌐', label: 'Open Browser', cmd: 'Open browser' },
+  { icon: '🎵', label: 'Play Music', cmd: 'Play music' },
+  { icon: '😄', label: 'Tell a Joke', cmd: 'Tell me a joke' },
+  { icon: '🌤', label: 'Weather', cmd: 'Open weather' },
+  { icon: '▶️', label: 'YouTube', cmd: 'Open YouTube' },
+  { icon: '🤖', label: 'Who are you?', cmd: 'Who are you?' },
+];
+
+function renderShortcuts() {
+  document.getElementById('shortcut-list').innerHTML = SHORTCUTS.map(s => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all 0.2s;" 
+      onclick="sendQuickCmd('${s.cmd}')"
+      onmouseover="this.style.borderColor='var(--border2)'"
+      onmouseout="this.style.borderColor='var(--border)'">
+      <span style="font-size:1rem;">${s.icon}</span>
+      <span style="font-size:0.8rem;color:var(--text2);">${s.label}</span>
+      <span style="margin-left:auto;font-family:'DM Mono',monospace;font-size:0.65rem;color:var(--text3);">${s.cmd}</span>
+    </div>
+  `).join('');
+}
+
+async function sendTextCommand() {
+  const input = document.getElementById('text-command');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  input.value = '';
+  await executeCommand(cmd);
+}
+
+async function sendQuickCmd(cmd) {
+  navigate('assistant');
+  document.getElementById('text-command').value = cmd;
+  await executeCommand(cmd);
+}
+
+async function executeCommand(cmd) {
+  logLine('cmd-log', 'info', `CMD: "${cmd}"`);
+  document.getElementById('response-display').textContent = 'Processing...';
+  document.getElementById('response-display').classList.remove('has-content');
+
+  try {
+    const res = await apiCall('/command', 'POST', { command: cmd });
+    document.getElementById('response-display').textContent = res.response;
+    document.getElementById('response-display').classList.add('has-content');
+    logLine('cmd-log', 'success', `RESP: ${res.response}`);
+    addActivity(`Command: "${cmd}" → ${res.action}`, 'var(--accent2)');
+    stats.commands++;
+    updateStatDisplays();
+  } catch {
+    document.getElementById('response-display').textContent = 'Backend offline. Please start app.py first.';
+    logLine('cmd-log', 'error', 'Backend connection failed');
+    toast('Backend offline — start app.py', 'error', '❌');
+  }
+}
+
+async function listenCommand() {
+  const btn = document.getElementById('mic-btn');
+  const status = document.getElementById('listen-status');
+  const wave = document.getElementById('waveform-wrap');
+  
+  btn.classList.add('listening');
+  btn.textContent = '🔴';
+  status.textContent = 'LISTENING...';
+  wave.style.display = 'flex';
+
+  try {
+    const res = await apiCall('/listen', 'POST');
+    btn.classList.remove('listening');
+    btn.textContent = '🎤';
+    wave.style.display = 'none';
+
+    if (res.success) {
+      status.textContent = `HEARD: "${res.heard}"`;
+      document.getElementById('response-display').textContent = res.response;
+      document.getElementById('response-display').classList.add('has-content');
+      logLine('cmd-log', 'success', `VOICE: "${res.heard}" → ${res.response}`);
+      addActivity(`Voice: "${res.heard}"`, 'var(--accent2)');
+      stats.commands++;
+      updateStatDisplays();
+      setTimeout(() => { status.textContent = 'IDLE'; }, 3000);
+    } else {
+      status.textContent = 'ERROR: ' + res.error;
+      toast(res.error || 'Could not hear command', 'warn', '⚠️');
+      setTimeout(() => { status.textContent = 'IDLE'; }, 3000);
+    }
+  } catch {
+    btn.classList.remove('listening');
+    btn.textContent = '🎤';
+    wave.style.display = 'none';
+    status.textContent = 'BACKEND OFFLINE';
+    toast('Backend offline — start app.py', 'error', '❌');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EMAIL
+// ═══════════════════════════════════════════════════════════════
+async function sendEmail() {
+  const from = document.getElementById('email-from').value.trim();
+  const pass = document.getElementById('email-pass').value;
+  const to   = document.getElementById('email-to').value.trim();
+  const subj = document.getElementById('email-subject').value.trim();
+  const body = document.getElementById('email-body').value.trim();
+
+  if (!from || !pass || !to || !body) {
+    toast('Fill in all required fields', 'warn', '⚠️');
+    return;
+  }
+
+  logLine('email-log', 'info', `Sending to ${to}...`);
+
+  try {
+    const res = await apiCall('/email/send', 'POST', {
+      sender_email: from, sender_password: pass,
+      recipient: to, subject: subj, body
+    });
+
+    if (res.success) {
+      toast('Email sent! ✅', 'success', '📧');
+      logLine('email-log', 'success', `Email sent to ${to}`);
+      addActivity(`Email sent to: ${to}`, 'var(--accent)');
+      document.getElementById('email-body').value = '';
+      document.getElementById('email-subject').value = '';
+    } else {
+      toast('Failed: ' + res.error, 'error', '❌');
+      logLine('email-log', 'error', 'Send failed: ' + res.error);
+    }
+  } catch {
+    toast('Backend offline — start app.py', 'error', '❌');
+    logLine('email-log', 'error', 'Backend offline');
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────
+function openURL(url) {
+  window.open(url, '_blank');
+  addActivity(`Opened: ${url}`, 'var(--accent2)');
+  stats.commands++;
+  updateStatDisplays();
+}
+
+// ─── Init ────────────────────────────────────────────────────────
+renderShortcuts();
+loadStats();
+testBackend();
+</script>
+</body>
+</html>
