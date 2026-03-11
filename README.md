@@ -1,4 +1,4 @@
-# 🔐 FaceVault — AI Desktop Assistant
+# 🔐 Alisha — AI Desktop Assistant
 
 A next-generation desktop assistant with biometric face verification, voice commands, email integration, and a stunning dark UI.
 
@@ -73,7 +73,7 @@ Copy `frontend/index.html` to `frontend/dist/index.html` and Flask will serve it
 ## 📁 Project Structure
 
 ```
-FaceVaultAssistant/
+AlishaAssistant/
 ├── backend/
 │   ├── app.py              ← Main Flask API server
 │   ├── requirements.txt    ← Python dependencies
