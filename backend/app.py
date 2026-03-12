@@ -1,5 +1,5 @@
 """
-FaceVault Assistant - Backend API Server
+Alisha Assistant - Backend API Server
 """
 import os
 import cv2
@@ -125,7 +125,7 @@ def process_command(command):
         return {'action': 'greeting', 'response': "I'm doing great, thank you for asking! Ready to help."}
     
     elif 'your name' in cmd or 'who are you' in cmd:
-        return {'action': 'info', 'response': "I'm FaceVault, your personal AI desktop assistant!"}
+        return {'action': 'info', 'response': "I'm Alisha, your personal AI desktop assistant!"}
     
     elif 'shutdown' in cmd or 'exit' in cmd or 'bye' in cmd:
         return {'action': 'shutdown', 'response': 'Goodbye! Have a great day!'}
@@ -295,7 +295,7 @@ def send_email():
     sender = data.get('sender_email', '')
     password = data.get('sender_password', '')
     recipient = data.get('recipient', '')
-    subject = data.get('subject', 'Message from FaceVault Assistant')
+    subject = data.get('subject', 'Message from Alisha Assistant')
     body = data.get('body', '')
     
     if not all([sender, password, recipient, body]):
@@ -338,6 +338,6 @@ def serve(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
-    print("🔐 FaceVault Assistant Backend Starting...")
+    print("🔐 Alisha Assistant Backend Starting...")
     print(f"📁 Known faces directory: {KNOWN_FACES_DIR}")
     app.run(debug=True, port=5000, host='0.0.0.0')
